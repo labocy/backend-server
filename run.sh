@@ -1,51 +1,39 @@
-#!/bin/bash
-# =========================================================
-# 잡코리아 크롤러 실행 스크립트 (라즈베리파이 / 리눅스 서버용)
-#
-# 사용법:
-#   chmod +x run.sh
-#   ./run.sh
-#
-# 하는 일:
-#   1) 가상환경(venv)이 없으면 생성
-#   2) 가상환경 활성화
-#   3) requirements.txt 기준으로 패키지 설치
-#   4) crawl.py 실행
-#
-# 참고: requests 기반이라 브라우저(Chromium) 설치가 필요 없습니다.
-#       (라즈베리파이 2B처럼 32비트/저사양 환경에서도 가볍게 동작)
-# =========================================================
+#!/usr/bin/env bash
+# 원터치 실행 스크립트
+# 1) 가상환경 생성/활성화 -> 2) 패키지 설치 -> 3) 크롤링 프로그램 실행
 set -e
 
-# 이 스크립트 파일이 있는 폴더로 이동 (어디서 실행하든 동작하도록)
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-VENV_DIR="venv"
-PYTHON_SCRIPT="crawl.py"
-REQUIREMENTS_FILE="requirements.txt"
+VENV_DIR="$SCRIPT_DIR/venv"
+PYTHON_FILE="crawl3.py"
 
-# 1) python3 / venv 모듈 확인
-if ! command -v python3 &> /dev/null; then
-    echo "[오류] python3이 설치되어 있지 않습니다. 먼저 설치해주세요: sudo apt install -y python3 python3-venv python3-pip"
-    exit 1
-fi
-
-# 2) 가상환경 생성 (없을 때만)
+# 1) 가상환경이 없으면 생성
 if [ ! -d "$VENV_DIR" ]; then
-    echo "[INFO] 가상환경(venv) 생성 중..."
+    echo "[INFO] 가상환경이 없어 새로 생성합니다: $VENV_DIR"
     python3 -m venv "$VENV_DIR"
 fi
 
-# 3) 가상환경 활성화
+# 2) 가상환경 활성화
 source "$VENV_DIR/bin/activate"
 
-# 4) pip 업그레이드 및 패키지 설치
-echo "[INFO] 패키지 설치 중..."
-pip install --upgrade pip
-pip install -r "$REQUIREMENTS_FILE"
+# 3) .env 파일 존재 확인 (없으면 DB 접속 정보가 없어 실행이 실패함)
+if [ ! -f "$SCRIPT_DIR/.env" ]; then
+    echo "[경고] .env 파일이 없습니다. .env.example을 참고해서 .env를 먼저 만들어주세요."
+    deactivate
+    exit 1
+fi
 
-# 5) 크롤링 스크립트 실행
-echo "[INFO] $PYTHON_SCRIPT 실행..."
-python "$PYTHON_SCRIPT"
+# 4) 필요한 패키지 설치 (requirements.txt 기준)
+echo "[INFO] 패키지를 설치합니다..."
+pip install --upgrade pip --quiet
+pip install -r requirements.txt --quiet
 
-echo "[INFO] 완료."
+# 5) 크롤링 프로그램 실행
+echo "[INFO] 크롤링 프로그램을 실행합니다..."
+python "$PYTHON_FILE"
+
+deactivate
+echo "[INFO] 실행이 완료되었습니다."
+
