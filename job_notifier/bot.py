@@ -4,6 +4,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 import config
 from db import fetch_new_jobs
+from state import load_last_job_id, save_last_job_id
 
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
@@ -45,26 +46,40 @@ def build_messages(jobs):
     return embeds
 
 
-async def send_notification():
+async def send_notification(force_all=False):
     channel = client.get_channel(config.CHANNEL_ID)
     if channel is None:
         print(f"[ERROR] 채널을 찾을 수 없음: {config.CHANNEL_ID}")
         return
 
+    # force_all=True면 저장된 기준값을 무시하고 전체 공고를 조회한다.
+    last_id = 0 if force_all else load_last_job_id()
+    is_first_run = (last_id == 0)
+
     try:
-        jobs = fetch_new_jobs()
+        jobs, max_id = fetch_new_jobs(last_id)
     except Exception as e:
         print(f"[ERROR] DB 조회 실패: {e}")
         return
 
     if not jobs:
-        print("[INFO] 신규 공고 없음")
+        print("[INFO] 추가된 공고 없음")
         return
+
+    if force_all:
+        print(f"[INFO] 실행 직후 전체 공고 전송: {len(jobs)}건")
+    elif is_first_run:
+        print(f"[INFO] 최초 실행 - 전체 공고 전송: {len(jobs)}건")
+    else:
+        print(f"[INFO] 신규 추가 공고 전송: {len(jobs)}건 (job_id > {last_id})")
 
     embeds = build_messages(jobs)
     for embed in embeds:
         await channel.send(embed=embed)
-    print(f"[INFO] 알림 전송 완료: {len(jobs)}건")
+
+    # 전송 성공 후 기준점 갱신 (다음번엔 이 이후 추가분만 전송)
+    save_last_job_id(max_id)
+    print(f"[INFO] 알림 전송 완료: {len(jobs)}건, 마지막 job_id={max_id}")
 
 
 @client.event
