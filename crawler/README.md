@@ -15,7 +15,7 @@
 
 ### 1. DB 계정 및 테이블
 
-`apply_db` 데이터베이스에 아래 구조의 `job` 테이블이 있어야 합니다.
+`apply_db` 데이터베이스에 아래 구조의 `job` 테이블이 있어야 합니다. (지원 여부는 더 이상 `job` 테이블에 두지 않고, 회원별로 여러 건 지원 가능하도록 `member_job_apply` 매핑 테이블로 분리되었습니다.)
 
 ```sql
 CREATE TABLE job (
@@ -30,10 +30,11 @@ CREATE TABLE job (
     end_at            DATE,
     crawled_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     job_url           VARCHAR(1000),
-    post_id           VARCHAR(255) NOT NULL UNIQUE,
-    apply             VARCHAR(20)  NOT NULL DEFAULT 'PENDING'
+    post_id           VARCHAR(255) NOT NULL UNIQUE
 );
 ```
+
+참고: 지원 현황은 별도 테이블(`member_job_apply`: member_id, job_id, apply, applied_at)에서 회원-공고 다대다로 관리됩니다. 크롤러는 이 테이블을 다루지 않으며, `job` 테이블에만 INSERT/UPDATE 합니다.
 
 크롤링 전용 계정도 만들어 둡니다 (root 직접 사용 비권장).
 
@@ -87,7 +88,7 @@ chmod +x run.sh
 - `requests` + `BeautifulSoup`으로 잡코리아 검색 결과 페이지를 파싱합니다.
 - 공고 URL에서 `post_id`를 추출하며, 추출에 실패한 공고는 저장하지 않습니다 (`post_id`가 DB에서 `UNIQUE NOT NULL`이기 때문).
 - 마감일 텍스트("상시채용", "~07/31(금)" 등)는 `parse_end_at()` 함수로 `DATE` 값 또는 `NULL`로 변환합니다.
-- DB 저장은 `INSERT ... ON DUPLICATE KEY UPDATE` 방식으로, 이미 존재하는 공고(`post_id` 기준)는 제목/지역/급여/마감일/크롤링 시각만 갱신하고 `apply` 상태(지원 여부)는 건드리지 않습니다.
+- DB 저장은 `INSERT ... ON DUPLICATE KEY UPDATE` 방식으로, 이미 존재하는 공고(`post_id` 기준)는 제목/지역/급여/마감일/크롤링 시각만 갱신합니다. 지원 여부(`apply`)는 `job` 테이블이 아니라 `member_job_apply` 테이블에서 회원별로 관리되므로 크롤러는 이 값에 관여하지 않습니다.
 - 저장 시 MariaDB의 `affected rows` 값(신규 INSERT=1, 기존 행 값 변경=2, 값 동일=0)으로 신규/갱신 공고를 구분해서, **신규로 새로 저장된 공고만** 디스코드로 알림을 보냅니다.
 
 ## 디스코드 알림
@@ -129,3 +130,4 @@ crontab -l
 - 크롤링 대상 검색 키워드, 페이지 범위는 `crawl3.py`의 `main()` 함수 내 `keyword`, `start_page`, `end_page` 값을 수정해 변경합니다.
 - 사이트 구조가 바뀌어 공고를 하나도 못 찾으면 `debug_page_N.html` 파일로 원본 HTML을 저장하니, 이 파일로 선택자를 다시 확인하면 됩니다.
 - crontab으로 자동 실행하기 전에, 먼저 수동으로 `python crawl3.py` 실행해서 디스코드 채널에 알림이 정상적으로 오는지 확인해보는 것을 권장합니다.
+
