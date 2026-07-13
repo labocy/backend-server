@@ -127,10 +127,3 @@ def logout(response: Response, current_member: dict = Depends(get_current_member
     response.delete_cookie(key=COOKIE_NAME, path="/")
     return {"success": True, "data": {"message": "로그아웃 되었습니다."}}
 
-
-# =========================================================
-# 내 정보 조회 (인증 동작 확인용 테스트 엔드포인트)
-# =========================================================
-@router.get("/users/me")
-def read_me(current_member: dict = Depends(get_current_member)):
-    return {"success": True, "data": current_member}
